@@ -17,7 +17,7 @@ _STOPWORDS = frozenset(
         "can", "could", "would", "should", "have", "has", "had", "you", "your",
         "yours", "with", "about", "from", "this", "that", "these", "those",
         "them", "they", "his", "her", "hers", "its", "our", "ours", "tell",
-        "give", "show", "please",
+        "give", "show", "please", "mateo", "use", "uses", "using",
     }
 )
 

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.content import ContentIndex, is_small_talk
+from app.content import ContentIndex, Document, is_small_talk
 
 FIXTURES = Path(__file__).parent / "fixtures" / "content"
 
@@ -21,6 +21,18 @@ def test_retrieve_returns_matching_documents() -> None:
 
     assert passages
     assert any("skills" in path for path, _ in passages)
+
+
+def test_retrieve_prioritizes_subject_over_common_question_words() -> None:
+    documents = tuple(
+        Document(f"/docs/page-{number}.md", "Mateo uses the project tools. " * 10)
+        for number in range(5)
+    ) + (Document("/cv/skills.md", "Languages: Python, Java, Go."),)
+    index = ContentIndex(documents)
+
+    passages = index.retrieve("Which languages does Mateo use?", 4, 6)
+
+    assert passages[0][0] == "/cv/skills.md"
 
 
 def test_retrieve_falls_back_to_defaults_without_terms() -> None:
