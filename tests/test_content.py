@@ -10,7 +10,7 @@ def test_index_loads_markdown_documents() -> None:
     paths = {document.path for document in index.documents}
 
     assert "/cv/about.md" in paths
-    assert "/projects/overview.md" in paths
+    assert "/docs/projects/overview.md" in paths
     assert index.document_count >= 4
 
 

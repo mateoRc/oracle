@@ -5,7 +5,7 @@ from pathlib import Path
 CONTENT_SUFFIXES = (".md", ".markdown", ".txt")
 _DEFAULT_PATHS = (
     "/cv/about.md",
-    "/projects/overview.md",
+    "/docs/projects/overview.md",
     "/cv/skills.md",
     "/cv/experience.md",
 )

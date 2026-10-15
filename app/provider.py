@@ -33,6 +33,10 @@ class ProviderError(Exception):
     """Raised when the language model provider cannot produce an answer."""
 
 
+# OpenRouter accepts at most three models in its fallback list.
+MAX_FALLBACK_MODELS = 3
+
+
 @dataclass(frozen=True)
 class Passage:
     path: str
@@ -48,6 +52,36 @@ class Provider(Protocol):
         passages: Sequence[Passage],
         system_prompt: str | None,
     ) -> str: ...
+
+
+def _build_messages(
+    question: str,
+    passages: Sequence[Passage],
+    system_prompt: str | None,
+) -> list[dict[str, str]]:
+    context = "\n\n".join(
+        f"{passage.path}\n{passage.text}" for passage in passages
+    ) or "(no matching content)"
+    messages: list[dict[str, str]] = []
+    if system_prompt is not None:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append(
+        {
+            "role": "user",
+            "content": f"Context:\n{context}\n\nQuestion: {question}",
+        }
+    )
+    return messages
+
+
+def _read_content(response: httpx.Response, provider: str) -> str:
+    try:
+        content = response.json()["choices"][0]["message"]["content"]
+    except (ValueError, KeyError, IndexError, TypeError) as error:
+        raise ProviderError(f"{provider} returned an unexpected response") from error
+    if not isinstance(content, str) or not content.strip():
+        raise ProviderError(f"{provider} returned an empty answer")
+    return content.strip()
 
 
 class MockProvider:
@@ -76,7 +110,7 @@ class OpenRouterProvider:
         client: httpx.Client,
         base_url: str,
         api_key: str,
-        model: str,
+        models: Sequence[str],
         max_tokens: int,
         app_url: str,
         app_title: str,
@@ -84,7 +118,7 @@ class OpenRouterProvider:
         self._client = client
         self._base_url = base_url
         self._api_key = api_key
-        self._model = model
+        self._models = tuple(models)
         self._max_tokens = max_tokens
         self._app_url = app_url
         self._app_title = app_title
@@ -98,24 +132,22 @@ class OpenRouterProvider:
         if not self._api_key:
             raise ProviderError("OpenRouter API key is not configured")
 
-        context = "\n\n".join(
-            f"{passage.path}\n{passage.text}" for passage in passages
-        ) or "(no matching content)"
-        messages: list[dict[str, str]] = []
-        if system_prompt is not None:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append(
-            {
-                "role": "user",
-                "content": f"Context:\n{context}\n\nQuestion: {question}",
-            }
-        )
-        payload = {
-            "model": self._model,
+        payload: dict[str, object] = {
             "max_tokens": self._max_tokens,
             "temperature": 0.2,
-            "messages": messages,
+            "messages": _build_messages(question, passages, system_prompt),
+            # Reasoning models would otherwise spend the entire token budget
+            # "thinking" and return empty content.
+            "reasoning": {"enabled": False},
         }
+        if len(self._models) > 1:
+            # OpenRouter falls through this ordered list when a model is
+            # rate-limited or unavailable, so free models rotate automatically.
+            payload["models"] = list(self._models[:MAX_FALLBACK_MODELS])
+        elif self._models:
+            payload["model"] = self._models[0]
+        else:
+            raise ProviderError("no model is configured")
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
@@ -132,13 +164,60 @@ class OpenRouterProvider:
         except httpx.HTTPError as error:
             raise ProviderError("OpenRouter request failed") from error
 
+        return _read_content(response, "OpenRouter")
+
+
+class GroqProvider:
+    name = "groq"
+
+    def __init__(
+        self,
+        client: httpx.Client,
+        base_url: str,
+        api_key: str,
+        model: str,
+        max_tokens: int,
+    ) -> None:
+        self._client = client
+        self._base_url = base_url
+        self._api_key = api_key
+        self._model = model
+        self._max_tokens = max_tokens
+
+    def answer(
+        self,
+        question: str,
+        passages: Sequence[Passage],
+        system_prompt: str | None,
+    ) -> str:
+        if not self._api_key:
+            raise ProviderError("Groq API key is not configured")
+
+        payload: dict[str, object] = {
+            "model": self._model,
+            "max_completion_tokens": self._max_tokens,
+            "temperature": 0.2,
+            # gpt-oss is a reasoning model: keep its thinking short so the
+            # token budget goes to the answer, and leave it out of the reply.
+            "reasoning_effort": "low",
+            "include_reasoning": False,
+            "messages": _build_messages(question, passages, system_prompt),
+        }
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
         try:
-            content = response.json()["choices"][0]["message"]["content"]
-        except (ValueError, KeyError, IndexError, TypeError) as error:
-            raise ProviderError("OpenRouter returned an unexpected response") from error
-        if not isinstance(content, str) or not content.strip():
-            raise ProviderError("OpenRouter returned an empty answer")
-        return content.strip()
+            response = self._client.post(
+                f"{self._base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as error:
+            raise ProviderError("Groq request failed") from error
+
+        return _read_content(response, "Groq")
 
 
 def build_provider(config: Config) -> Provider:
@@ -149,9 +228,17 @@ def build_provider(config: Config) -> Provider:
             httpx.Client(timeout=config.request_timeout_seconds),
             config.base_url,
             config.api_key,
-            config.model,
+            config.models,
             config.max_answer_tokens,
             config.app_url,
             config.app_title,
+        )
+    if config.provider == "groq":
+        return GroqProvider(
+            httpx.Client(timeout=config.request_timeout_seconds),
+            config.base_url,
+            config.api_key,
+            config.models[0],
+            config.max_answer_tokens,
         )
     raise ValueError(f"unsupported provider: {config.provider}")
