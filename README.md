@@ -55,7 +55,7 @@ paths.
 
 `POST /ask` requires `Authorization: Bearer <ORACLE_AUTH_TOKEN>`. When the
 provider is unavailable or the daily budget is exhausted, Oracle returns
-`503` so Vaultsh can degrade to `ask unavailable`.
+`503` so Vaultsh can degrade to `invoke unavailable`.
 
 ## Test
 
