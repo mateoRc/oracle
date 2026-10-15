@@ -15,6 +15,9 @@ def _clean_lore_answer(answer: str) -> str:
     """Remove formatting the model occasionally adds despite the prompt."""
     answer = _LEADING_EMOJI.sub("", answer)
     answer = answer.replace("**", "").replace("`", "")
+    answer = re.sub(r"\bMateo(?:'s|’s) Backend Lab\b", "Mateo's Vault", answer, flags=re.IGNORECASE)
+    answer = re.sub(r"\bthe Backend Lab\b", "the Vault", answer, flags=re.IGNORECASE)
+    answer = re.sub(r"\bBackend Lab\b", "the Vault", answer, flags=re.IGNORECASE)
     return re.sub(r"[ \t]+\n", "\n", answer).strip()
 
 
@@ -66,7 +69,7 @@ class Assistant:
         if re.fullmatch(r"\s*who\s+am\s+i\s*[?!.\s]*", question, re.IGNORECASE):
             if lore:
                 return (
-                    "Seeker, I cannot identify you from this question. You are visiting Mateo's Backend Lab portfolio.",
+                    "Seeker, I cannot identify you from this question. You are visiting Mateo's Vault.",
                     (),
                 )
             return (

@@ -17,6 +17,12 @@ def test_lore_answer_removes_model_formatting() -> None:
     assert _clean_lore_answer(answer) == "A factual answer\nwith plain text."
 
 
+def test_lore_answer_uses_vault_name() -> None:
+    answer = "Mateo's Backend Lab is the Backend Lab portfolio."
+
+    assert _clean_lore_answer(answer) == "Mateo's Vault is the Vault portfolio."
+
+
 def test_endpoints_return_answer_and_sources() -> None:
     asyncio.run(_test_endpoints_return_answer_and_sources())
 
@@ -63,6 +69,8 @@ async def _test_identity_question_does_not_identify_visitor_as_mateo() -> None:
             body = response.json()
             assert "cannot identify you" in body["answer"]
             assert body["sources"] == []
+            if endpoint == "/invoke":
+                assert "Backend Lab" not in body["answer"]
 
 
 async def _test_small_talk_returns_no_sources() -> None:
