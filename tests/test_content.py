@@ -35,6 +35,31 @@ def test_retrieve_prioritizes_subject_over_common_question_words() -> None:
     assert passages[0][0] == "/cv/skills.md"
 
 
+def test_generic_project_question_includes_overview_summary() -> None:
+    documents = (
+        Document("/docs/content.md", "Project project project project."),
+        Document(
+            "/docs/projects/overview.md",
+            "Backend Lab is a read-only portfolio terminal.\nProjects live here.",
+        ),
+    )
+
+    passages = ContentIndex(documents).retrieve(
+        "explain this project, where am i?", 2, 2
+    )
+
+    assert passages[0] == (
+        "/docs/projects/overview.md",
+        "Backend Lab is a read-only portfolio terminal.\nProjects live here.",
+    )
+
+
+def test_location_question_does_not_retrieve_mateos_bio() -> None:
+    index = ContentIndex.from_directory(FIXTURES)
+
+    assert index.retrieve("where am I?", 4, 6) == []
+
+
 def test_retrieve_falls_back_to_defaults_without_terms() -> None:
     index = ContentIndex.from_directory(FIXTURES)
 

@@ -78,6 +78,15 @@ class ContentIndex:
         max_lines: int,
     ) -> list[tuple[str, str]]:
         terms = _terms(question)
+        if not terms and re.search(r"\b(?:where|who) am i\b", question.lower()):
+            return []
+        generic_project_question = (
+            "project" in terms
+            and not any(
+                name in question.lower()
+                for name in ("vaultsh", "atlas", "forge", "oracle", "sentinel", "scribe")
+            )
+        )
         matches: list[tuple[int, Document, list[str]]] = []
         if terms:
             for document in self._documents:
@@ -94,10 +103,24 @@ class ContentIndex:
 
         matches.sort(key=lambda item: (-item[0], item[1].path))
         if matches:
-            return [
+            passages = [
                 (document.path, "\n".join(lines[:max_lines]))
                 for _, document, lines in matches[:max_files]
             ]
+            if generic_project_question:
+                overview = next(
+                    (
+                        document for document in self._documents
+                        if document.path == "/docs/projects/overview.md"
+                    ),
+                    None,
+                )
+                if overview is not None:
+                    passages = [_excerpt(overview, max_lines)] + [
+                        passage for passage in passages
+                        if passage[0] != overview.path
+                    ][:max_files - 1]
+            return passages
         return self._default(max_files, max_lines)
 
     def _default(self, max_files: int, max_lines: int) -> list[tuple[str, str]]:
