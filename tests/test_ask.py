@@ -37,6 +37,27 @@ def test_small_talk_returns_no_sources() -> None:
     asyncio.run(_test_small_talk_returns_no_sources())
 
 
+def test_identity_question_does_not_identify_visitor_as_mateo() -> None:
+    asyncio.run(_test_identity_question_does_not_identify_visitor_as_mateo())
+
+
+async def _test_identity_question_does_not_identify_visitor_as_mateo() -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://oracle",
+    ) as client:
+        for endpoint in ENDPOINTS:
+            response = await client.post(
+                endpoint,
+                headers=AUTH_HEADERS,
+                json={"question": "Who am I?"},
+            )
+            assert response.status_code == 200
+            body = response.json()
+            assert "cannot identify you" in body["answer"]
+            assert body["sources"] == []
+
+
 async def _test_small_talk_returns_no_sources() -> None:
     async with AsyncClient(
         transport=ASGITransport(app=app),

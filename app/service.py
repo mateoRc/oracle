@@ -1,3 +1,4 @@
+import re
 import threading
 from collections import OrderedDict
 from datetime import UTC, datetime
@@ -52,6 +53,16 @@ class Assistant:
         *,
         lore: bool = True,
     ) -> tuple[str, tuple[str, ...]]:
+        if re.fullmatch(r"\s*who\s+am\s+i\s*[?!.\s]*", question, re.IGNORECASE):
+            if lore:
+                return (
+                    "Seeker, I cannot identify you from this question. You are visiting Mateo's Backend Lab portfolio.",
+                    (),
+                )
+            return (
+                "I cannot identify you from this question. You are visiting Mateo's Backend Lab portfolio.",
+                (),
+            )
         mode = "lore" if lore else "plain"
         key = f"{mode}:{' '.join(question.lower().split())}"
         with self._lock:

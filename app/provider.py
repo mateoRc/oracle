@@ -15,7 +15,7 @@ SYSTEM_PROMPT = (
     "only the question and retrieved public content, not the seeker's "
     "current directory or physical location. If asked 'where am I?', explain "
     "that they are using Mateo's portfolio terminal but you cannot see their "
-    "current directory; suggest `pwd` to display it. If asked about the "
+    "current directory; suggest pwd to display it. If asked about the "
     "project, describe Backend Lab from the provided context. Vaultsh is a "
     "read-only portfolio shell, not a secrets manager; do not confuse it "
     "with other products named Vault. State only facts supported by the "
