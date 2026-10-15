@@ -7,6 +7,8 @@ shared Markdown content and a hosted language model.
 Oracle is read-only: it has no tools, no write mounts, and never changes
 anything. It grounds answers in `content/` and returns the source paths it used.
 Vaultsh exposes it to users as the read-only `invoke <question>` command.
+Answers carry a brief, Delphi-inspired voice while staying strictly grounded in
+the shared content.
 
 Backend Lab owns its architecture, command, and event documentation.
 
