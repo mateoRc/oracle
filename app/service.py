@@ -3,7 +3,7 @@ from collections import OrderedDict
 from datetime import UTC, datetime
 
 from app.config import Config
-from app.content import ContentIndex
+from app.content import ContentIndex, is_small_talk
 from app.provider import SYSTEM_PROMPT, Passage, Provider, build_provider
 
 
@@ -61,10 +61,14 @@ class Assistant:
                 return cached
 
         self._reserve_budget()
-        passages = self._index.retrieve(
-            question,
-            self._config.retrieval_files,
-            self._config.retrieval_lines,
+        passages = (
+            []
+            if is_small_talk(question)
+            else self._index.retrieve(
+                question,
+                self._config.retrieval_files,
+                self._config.retrieval_lines,
+            )
         )
         with self._semaphore:
             answer = self._provider.answer(

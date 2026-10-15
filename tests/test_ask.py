@@ -33,6 +33,28 @@ async def _test_endpoints_return_answer_and_sources() -> None:
             assert all(source.startswith("/") for source in body["sources"])
 
 
+def test_small_talk_returns_no_sources() -> None:
+    asyncio.run(_test_small_talk_returns_no_sources())
+
+
+async def _test_small_talk_returns_no_sources() -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://oracle",
+    ) as client:
+        for endpoint in ENDPOINTS:
+            response = await client.post(
+                endpoint,
+                headers=AUTH_HEADERS,
+                json={"question": "hello"},
+            )
+
+            assert response.status_code == 200
+            body = response.json()
+            assert body["answer"]
+            assert body["sources"] == []
+
+
 def test_endpoints_reject_invalid_requests() -> None:
     asyncio.run(_test_endpoints_reject_invalid_requests())
 

@@ -21,6 +21,19 @@ _STOPWORDS = frozenset(
     }
 )
 
+# A message made up only of these carries no question, so it is small talk:
+# answer it conversationally and ground nothing.
+_PLEASANTRIES = frozenset(
+    {
+        "hi", "hii", "hey", "heya", "hello", "helo", "yo", "howdy", "hiya",
+        "greetings", "sup", "morning", "afternoon", "evening", "good", "day",
+        "thanks", "thank", "thx", "ty", "cheers", "please", "ok", "okay",
+        "cool", "nice", "great", "bye", "goodbye", "cya", "there", "you", "u",
+        "how", "are", "doing", "going", "up", "friend", "oracle",
+    }
+)
+_WORD = re.compile(r"[a-z0-9']+")
+
 
 @dataclass(frozen=True)
 class Document:
@@ -115,3 +128,9 @@ def _terms(question: str) -> list[str]:
         if term not in _STOPWORDS and term not in seen:
             seen.append(term)
     return seen
+
+
+def is_small_talk(question: str) -> bool:
+    """True when the message is only a greeting, thanks, or pleasantry."""
+    words = _WORD.findall(question.lower())
+    return bool(words) and all(word in _PLEASANTRIES for word in words)

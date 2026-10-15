@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.content import ContentIndex
+from app.content import ContentIndex, is_small_talk
 
 FIXTURES = Path(__file__).parent / "fixtures" / "content"
 
@@ -37,3 +37,15 @@ def test_missing_directory_yields_empty_index() -> None:
 
     assert index.document_count == 0
     assert index.retrieve("anything", 4, 6) == []
+
+
+def test_small_talk_recognises_greetings() -> None:
+    assert is_small_talk("hello")
+    assert is_small_talk("Hi there!")
+    assert is_small_talk("thank you")
+
+
+def test_small_talk_rejects_real_questions() -> None:
+    assert not is_small_talk("who is Mateo")
+    assert not is_small_talk("hello, what is Vaultsh?")
+    assert not is_small_talk("")
