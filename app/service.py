@@ -8,6 +8,16 @@ from app.content import ContentIndex, is_small_talk
 from app.provider import SYSTEM_PROMPT, Passage, Provider, build_provider
 
 
+_LEADING_EMOJI = re.compile(r"(?m)^[ \t]*[\U0001f300-\U0001faff]\ufe0f?[ \t]*")
+
+
+def _clean_lore_answer(answer: str) -> str:
+    """Remove formatting the model occasionally adds despite the prompt."""
+    answer = _LEADING_EMOJI.sub("", answer)
+    answer = answer.replace("**", "").replace("`", "")
+    return re.sub(r"[ \t]+\n", "\n", answer).strip()
+
+
 class BudgetExceeded(Exception):
     """Raised when the daily upstream question budget is exhausted."""
 
@@ -87,7 +97,7 @@ class Assistant:
                 tuple(Passage(path, text) for path, text in passages),
                 SYSTEM_PROMPT if lore else None,
             )
-        answer = answer.strip()
+        answer = _clean_lore_answer(answer) if lore else answer.strip()
         sources = tuple(path for path, _ in passages)
 
         with self._lock:

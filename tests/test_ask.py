@@ -5,9 +5,16 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app, assistant
 from app.models import MAX_QUESTION_CHARS
 from app.provider import ProviderError
+from app.service import _clean_lore_answer
 
 AUTH_HEADERS = {"Authorization": "Bearer test-oracle-token"}
 ENDPOINTS = ("/invoke", "/ask")
+
+
+def test_lore_answer_removes_model_formatting() -> None:
+    answer = "🌄 **A factual answer**  \nwith `plain text`."
+
+    assert _clean_lore_answer(answer) == "A factual answer\nwith plain text."
 
 
 def test_endpoints_return_answer_and_sources() -> None:
