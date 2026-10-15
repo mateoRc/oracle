@@ -1,4 +1,14 @@
-from app.provider import GroqProvider, OpenRouterProvider, Passage
+import pytest
+
+from app.config import Config
+from app.provider import (
+    FallbackProvider,
+    GroqProvider,
+    OpenRouterProvider,
+    Passage,
+    ProviderError,
+    build_provider,
+)
 
 
 class _Response:
@@ -142,3 +152,71 @@ def test_groq_plain_mode_omits_the_system_prompt() -> None:
     assert recorder.payload is not None
     roles = [message["role"] for message in recorder.payload["messages"]]
     assert roles == ["user"]
+
+
+class _StubProvider:
+    """Provider stand-in that records calls and returns a fixed outcome."""
+
+    def __init__(
+        self,
+        name: str,
+        answer: str | None = None,
+        error: Exception | None = None,
+    ) -> None:
+        self.name = name
+        self._answer = answer
+        self._error = error
+        self.calls = 0
+
+    def answer(self, question, passages, system_prompt):
+        self.calls += 1
+        if self._error is not None:
+            raise self._error
+        return self._answer
+
+
+def test_fallback_provider_returns_the_first_answer() -> None:
+    first = _StubProvider("first", answer="from first")
+    second = _StubProvider("second", answer="from second")
+
+    provider = FallbackProvider([first, second])
+
+    assert provider.answer("q", [], "SYSTEM") == "from first"
+    assert second.calls == 0
+    assert provider.name == "first>second"
+
+
+def test_fallback_provider_falls_through_on_provider_error() -> None:
+    first = _StubProvider("first", error=ProviderError("down"))
+    second = _StubProvider("second", answer="from second")
+
+    assert FallbackProvider([first, second]).answer("q", [], None) == "from second"
+    assert first.calls == 1
+
+
+def test_fallback_provider_raises_when_every_provider_fails() -> None:
+    first = _StubProvider("first", error=ProviderError("down"))
+    second = _StubProvider("second", error=ProviderError("nope"))
+
+    with pytest.raises(ProviderError):
+        FallbackProvider([first, second]).answer("q", [], None)
+
+
+def test_build_provider_chains_configured_providers(monkeypatch) -> None:
+    monkeypatch.setenv("ORACLE_PROVIDER", "groq,openrouter")
+    monkeypatch.setenv("GROQ_API_KEY", "groq-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-key")
+
+    provider = build_provider(Config.from_environment())
+
+    assert isinstance(provider, FallbackProvider)
+    assert provider.name == "groq>openrouter"
+
+
+def test_build_provider_returns_a_single_provider(monkeypatch) -> None:
+    monkeypatch.setenv("ORACLE_PROVIDER", "groq")
+    monkeypatch.setenv("GROQ_API_KEY", "groq-key")
+
+    provider = build_provider(Config.from_environment())
+
+    assert isinstance(provider, GroqProvider)

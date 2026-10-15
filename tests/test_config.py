@@ -1,4 +1,4 @@
-from app.config import Config
+from app.config import DEFAULT_MODELS, Config
 
 
 def test_groq_defaults(monkeypatch) -> None:
@@ -45,3 +45,25 @@ def test_oracle_api_key_is_used_as_a_fallback(monkeypatch) -> None:
     config = Config.from_environment()
 
     assert config.api_key == "shared-key"
+
+
+def test_provider_chain_parses_a_fallback_list(monkeypatch) -> None:
+    monkeypatch.setenv("ORACLE_PROVIDER", "groq, openrouter")
+    monkeypatch.setenv("ORACLE_MODEL", "openai/gpt-oss-20b")
+    monkeypatch.delenv("ORACLE_MODELS", raising=False)
+    monkeypatch.setenv("GROQ_API_KEY", "groq-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-key")
+
+    config = Config.from_environment()
+
+    assert [settings.name for settings in config.providers] == [
+        "groq",
+        "openrouter",
+    ]
+    assert config.provider == "groq"
+    assert config.providers[0].api_key == "groq-key"
+    assert config.providers[1].api_key == "openrouter-key"
+    # ORACLE_MODEL overrides only the primary; the fallback keeps its default.
+    assert config.providers[0].models == ("openai/gpt-oss-20b",)
+    assert config.providers[1].models == (DEFAULT_MODELS["openrouter"],)
+    assert config.providers[1].base_url == "https://openrouter.ai/api/v1"

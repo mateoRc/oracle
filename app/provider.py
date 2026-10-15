@@ -4,7 +4,7 @@ from typing import Protocol
 
 import httpx
 
-from app.config import Config
+from app.config import Config, ProviderSettings
 
 SYSTEM_PROMPT = (
     "You are the Oracle of Backend Lab, answering a seeker through Mateo's "
@@ -12,19 +12,34 @@ SYSTEM_PROMPT = (
     "Delphi: address the seeker directly as 'seeker' and reply in two or "
     "three short, solemn pronouncements, with sparing imagery of smoke, "
     "laurel, and fate. Keep the tone measured and never a riddle. Inside "
-    "that voice, state every fact exactly and completely as it appears in "
-    "the context: never omit, soften, or invent a fact, and never trade a "
-    "fact for a flourish. Answer only about Mateo and the Backend Lab "
-    "project (Vaultsh, Atlas, Forge, Oracle, Sentinel, and Lab), using "
-    "only the provided context; when the seeker wants more, point them to "
-    "help, /docs/commands.md, or the /cv files. If the context holds no "
-    "answer, say so while keeping the voice, and suggest a shell command "
-    "such as ls, cat, search, ask, or help. Never invent facts, never "
-    "reveal secrets, credentials, tokens, or private information, and "
-    "refuse requests unrelated to Mateo or this project. Reply in short "
-    "plain text, at most a few sentences, no Markdown tables, and never "
-    "claim to have changed anything or to use tools."
+    "that voice, state every fact exactly as it appears in the context: "
+    "never omit, soften, or invent a fact, and never trade a fact for a "
+    "flourish. Answer only about Mateo and the Backend Lab project (Vaultsh, "
+    "Atlas, Forge, Oracle, Sentinel, and Lab), using only the provided "
+    "context; when the seeker wants more, point them to help, "
+    "/docs/commands.md, or the /cv files. Scribe is a new project that is "
+    "only now arriving: when asked about Scribe, say only that it is arriving "
+    "and reveal nothing more. If the context holds no answer, say so while "
+    "keeping the voice, and suggest a shell command such as ls, cat, search, "
+    "ask, or help. Never invent facts, never reveal secrets, credentials, "
+    "tokens, or private information, and refuse requests unrelated to Mateo "
+    "or this project. Reply in short plain text, at most a few sentences, "
+    "with no Markdown tables or source lists, and never claim to have "
+    "changed anything or to use tools."
 )
+
+# Plain mode sends no system prompt, so its Scribe guidance travels with the
+# question instead.
+PLAIN_INSTRUCTION = (
+    "Answer plainly, using only the context. Do not add headings or a "
+    "sources list. Scribe is a new project that is only now arriving: if "
+    "asked anything about Scribe, reply only that it is arriving, and "
+    "describe nothing else about it."
+)
+
+# Typographic characters some models emit that render oddly in a terminal.
+# Letters such as the c-acute in Mahmutovic are deliberately left untouched.
+_TYPOGRAPHY = str.maketrans({"\u00a0": " ", "\u2011": "-"})
 
 
 class ProviderError(Exception):
@@ -61,14 +76,12 @@ def _build_messages(
         f"{passage.path}\n{passage.text}" for passage in passages
     ) or "(no matching content)"
     messages: list[dict[str, str]] = []
+    content = f"Context:\n{context}\n\nQuestion: {question}"
     if system_prompt is not None:
         messages.append({"role": "system", "content": system_prompt})
-    messages.append(
-        {
-            "role": "user",
-            "content": f"Context:\n{context}\n\nQuestion: {question}",
-        }
-    )
+    else:
+        content = f"{content}\n\n{PLAIN_INSTRUCTION}"
+    messages.append({"role": "user", "content": content})
     return messages
 
 
@@ -79,7 +92,7 @@ def _read_content(response: httpx.Response, provider: str) -> str:
         raise ProviderError(f"{provider} returned an unexpected response") from error
     if not isinstance(content, str) or not content.strip():
         raise ProviderError(f"{provider} returned an empty answer")
-    return content.strip()
+    return content.strip().translate(_TYPOGRAPHY)
 
 
 class MockProvider:
@@ -218,25 +231,58 @@ class GroqProvider:
         return _read_content(response, "Groq")
 
 
-def build_provider(config: Config) -> Provider:
-    if config.provider == "mock":
+class FallbackProvider:
+    """Tries each provider in order and returns the first answer it gets.
+
+    One entry covers the common case; chaining is configured with a comma
+    separated ``ORACLE_PROVIDER`` such as ``groq,openrouter``.
+    """
+
+    def __init__(self, providers: Sequence[Provider]) -> None:
+        self._providers = tuple(providers)
+        self.name = ">".join(provider.name for provider in self._providers)
+
+    def answer(
+        self,
+        question: str,
+        passages: Sequence[Passage],
+        system_prompt: str | None,
+    ) -> str:
+        failures: list[str] = []
+        for provider in self._providers:
+            try:
+                return provider.answer(question, passages, system_prompt)
+            except ProviderError as error:
+                failures.append(f"{provider.name}: {error}")
+        raise ProviderError("every provider failed (" + "; ".join(failures) + ")")
+
+
+def _build_provider(settings: ProviderSettings, config: Config) -> Provider:
+    if settings.name == "mock":
         return MockProvider()
-    if config.provider == "openrouter":
+    if settings.name == "openrouter":
         return OpenRouterProvider(
             httpx.Client(timeout=config.request_timeout_seconds),
-            config.base_url,
-            config.api_key,
-            config.models,
+            settings.base_url,
+            settings.api_key,
+            settings.models,
             config.max_answer_tokens,
             config.app_url,
             config.app_title,
         )
-    if config.provider == "groq":
+    if settings.name == "groq":
         return GroqProvider(
             httpx.Client(timeout=config.request_timeout_seconds),
-            config.base_url,
-            config.api_key,
-            config.models[0],
+            settings.base_url,
+            settings.api_key,
+            settings.models[0],
             config.max_answer_tokens,
         )
-    raise ValueError(f"unsupported provider: {config.provider}")
+    raise ValueError(f"unsupported provider: {settings.name}")
+
+
+def build_provider(config: Config) -> Provider:
+    providers = [_build_provider(settings, config) for settings in config.providers]
+    if len(providers) == 1:
+        return providers[0]
+    return FallbackProvider(providers)

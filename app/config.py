@@ -4,12 +4,19 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
-class Config:
-    content_root: Path
-    provider: str
+class ProviderSettings:
+    """Connection details for one provider in the fallback chain."""
+
+    name: str
     models: tuple[str, ...]
     base_url: str
     api_key: str
+
+
+@dataclass(frozen=True)
+class Config:
+    content_root: Path
+    providers: tuple[ProviderSettings, ...]
     app_url: str
     app_title: str
     max_answer_tokens: int
@@ -20,15 +27,28 @@ class Config:
     retrieval_files: int
     retrieval_lines: int
 
+    @property
+    def provider(self) -> str:
+        """Name of the first provider in the chain."""
+        return self.providers[0].name
+
+    @property
+    def models(self) -> tuple[str, ...]:
+        return self.providers[0].models
+
+    @property
+    def base_url(self) -> str:
+        return self.providers[0].base_url
+
+    @property
+    def api_key(self) -> str:
+        return self.providers[0].api_key
+
     @classmethod
     def from_environment(cls) -> "Config":
-        provider = os.getenv("ORACLE_PROVIDER", "openrouter").strip().lower()
         return cls(
             content_root=Path(os.getenv("ORACLE_CONTENT_ROOT", "/app/content")),
-            provider=provider,
-            models=_models(provider),
-            base_url=_base_url(provider),
-            api_key=_api_key(provider),
+            providers=_providers(),
             app_url=os.getenv("ORACLE_APP_URL", "https://mateolabs.dev"),
             app_title=os.getenv("ORACLE_APP_TITLE", "Backend Lab Oracle"),
             max_answer_tokens=_positive_int("ORACLE_MAX_ANSWER_TOKENS", 400),
@@ -76,9 +96,30 @@ BASE_URL_VARIABLES = {
 }
 
 
-def _models(provider: str) -> tuple[str, ...]:
+def _providers() -> tuple[ProviderSettings, ...]:
+    # ORACLE_PROVIDER may list a fallback chain, e.g. "groq,openrouter".
+    names = [
+        name.strip().lower()
+        for name in os.getenv("ORACLE_PROVIDER", "openrouter").split(",")
+        if name.strip()
+    ]
+    if not names:
+        names = ["openrouter"]
+    primary = names[0]
+    return tuple(
+        ProviderSettings(
+            name,
+            _models(name, primary=name == primary),
+            _base_url(name),
+            _api_key(name),
+        )
+        for name in names
+    )
+
+
+def _models(provider: str, *, primary: bool) -> tuple[str, ...]:
     # ORACLE_MODELS is the ordered rotation list OpenRouter walks as free
-    # models are rate-limited; other providers answer with a single model.
+    # models are rate-limited; ORACLE_MODEL overrides the primary's model.
     if provider == "openrouter":
         configured = os.getenv("ORACLE_MODELS", "").strip()
         if configured:
@@ -87,8 +128,11 @@ def _models(provider: str) -> tuple[str, ...]:
             )
             if models:
                 return models
-    default = DEFAULT_MODELS.get(provider, DEFAULT_MODELS["openrouter"])
-    return (os.getenv("ORACLE_MODEL") or default,)
+    if primary:
+        override = os.getenv("ORACLE_MODEL", "").strip()
+        if override:
+            return (override,)
+    return (DEFAULT_MODELS.get(provider, DEFAULT_MODELS["openrouter"]),)
 
 
 def _base_url(provider: str) -> str:
