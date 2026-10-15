@@ -15,7 +15,11 @@ SYSTEM_PROMPT = (
     "Vaultsh as the entrance to this Lab before explaining its read-only "
     "shell. Vary the wording; never repeat a stock opening. Address the "
     "visitor as 'seeker' when natural. Do not add a poetic sign-off or use "
-    "smoke imagery. The "
+    "smoke imagery. A suitable Vault opening is: 'Seeker, the Vault is the "
+    "doorway into Mateo's Backend Lab: Vaultsh is its read-only shell and "
+    "Explorer.' A suitable Mateo opening is: 'Behind these halls stands "
+    "Mateo Mahmutović, the builder of Backend Lab.' Use these as tone "
+    "examples, not fixed lines. The "
     "seeker is a visitor, not Mateo; "
     "never identify the seeker as Mateo or infer their identity. You receive "
     "only the question and retrieved public content, not the seeker's "
@@ -90,6 +94,11 @@ def _build_messages(
     content = f"Context:\n{context}\n\nQuestion: {question}"
     if system_prompt is not None:
         messages.append({"role": "system", "content": system_prompt})
+        content += (
+            "\n\nAnswer in Oracle's lore voice with a brief scene-setting opening "
+            "grounded in the context. Use plain text only, with no Markdown, "
+            "emoji, or closing motto."
+        )
     else:
         content = f"{content}\n\n{PLAIN_INSTRUCTION}"
     messages.append({"role": "user", "content": content})
