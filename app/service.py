@@ -76,6 +76,23 @@ class Assistant:
                 "I cannot identify you from this question. You are visiting Mateo's Backend Lab portfolio.",
                 (),
             )
+        if lore and re.fullmatch(
+            r"\s*what\s+is\s+(?:the\s+)?vault\s*[?!.\s]*",
+            question,
+            re.IGNORECASE,
+        ):
+            paths = {document.path for document in self._index.documents}
+            sources = tuple(
+                path for path in ("/docs/projects/overview.md", "/cv/about.md")
+                if path in paths
+            )
+            return (
+                "Seeker, the Vault is a doorway to Atlas, Forge, Oracle, and "
+                "Mateo's public knowledge and experience. Vaultsh presents "
+                "a read-only virtual filesystem that visitors can browse "
+                "via commands.",
+                sources,
+            )
         mode = "lore" if lore else "plain"
         key = f"{mode}:{' '.join(question.lower().split())}"
         with self._lock:

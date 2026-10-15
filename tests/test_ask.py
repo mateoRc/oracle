@@ -54,6 +54,28 @@ def test_identity_question_does_not_identify_visitor_as_mateo() -> None:
     asyncio.run(_test_identity_question_does_not_identify_visitor_as_mateo())
 
 
+def test_vault_intro_stays_grounded() -> None:
+    asyncio.run(_test_vault_intro_stays_grounded())
+
+
+async def _test_vault_intro_stays_grounded() -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://oracle",
+    ) as client:
+        response = await client.post(
+            "/invoke",
+            headers=AUTH_HEADERS,
+            json={"question": "What is Vault?"},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert "doorway to Atlas, Forge, Oracle" in body["answer"]
+        assert "virtual filesystem that visitors can browse via commands" in body["answer"]
+        assert "network" not in body["answer"].lower()
+        assert "/docs/projects/overview.md" in body["sources"]
+
+
 async def _test_identity_question_does_not_identify_visitor_as_mateo() -> None:
     async with AsyncClient(
         transport=ASGITransport(app=app),
