@@ -37,14 +37,26 @@ class Passage:
 class Provider(Protocol):
     name: str
 
-    def answer(self, question: str, passages: Sequence[Passage]) -> str: ...
+    def answer(
+        self,
+        question: str,
+        passages: Sequence[Passage],
+        system_prompt: str | None,
+    ) -> str: ...
 
 
 class MockProvider:
     name = "mock"
 
-    def answer(self, question: str, passages: Sequence[Passage]) -> str:
+    def answer(
+        self,
+        question: str,
+        passages: Sequence[Passage],
+        system_prompt: str | None,
+    ) -> str:
         sources = ", ".join(passage.path for passage in passages) or "no sources"
+        if system_prompt is None:
+            return f"(mock) Plain answer to {question!r} from: {sources}."
         return (
             f"(mock oracle) Seek, and the leaves stir: I would answer "
             f"{question!r} from {sources}."
@@ -72,24 +84,32 @@ class OpenRouterProvider:
         self._app_url = app_url
         self._app_title = app_title
 
-    def answer(self, question: str, passages: Sequence[Passage]) -> str:
+    def answer(
+        self,
+        question: str,
+        passages: Sequence[Passage],
+        system_prompt: str | None,
+    ) -> str:
         if not self._api_key:
             raise ProviderError("OpenRouter API key is not configured")
 
         context = "\n\n".join(
             f"{passage.path}\n{passage.text}" for passage in passages
         ) or "(no matching content)"
+        messages: list[dict[str, str]] = []
+        if system_prompt is not None:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append(
+            {
+                "role": "user",
+                "content": f"Context:\n{context}\n\nQuestion: {question}",
+            }
+        )
         payload = {
             "model": self._model,
             "max_tokens": self._max_tokens,
             "temperature": 0.2,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": f"Context:\n{context}\n\nQuestion: {question}",
-                },
-            ],
+            "messages": messages,
         }
         headers = {
             "Authorization": f"Bearer {self._api_key}",

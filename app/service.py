@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from app.config import Config
 from app.content import ContentIndex
-from app.provider import Passage, Provider, build_provider
+from app.provider import SYSTEM_PROMPT, Passage, Provider, build_provider
 
 
 class BudgetExceeded(Exception):
@@ -46,8 +46,14 @@ class Assistant:
     def document_count(self) -> int:
         return self._index.document_count
 
-    def ask(self, question: str) -> tuple[str, tuple[str, ...]]:
-        key = " ".join(question.lower().split())
+    def answer(
+        self,
+        question: str,
+        *,
+        lore: bool = True,
+    ) -> tuple[str, tuple[str, ...]]:
+        mode = "lore" if lore else "plain"
+        key = f"{mode}:{' '.join(question.lower().split())}"
         with self._lock:
             cached = self._cache.get(key)
             if cached is not None:
@@ -64,6 +70,7 @@ class Assistant:
             answer = self._provider.answer(
                 question,
                 tuple(Passage(path, text) for path, text in passages),
+                SYSTEM_PROMPT if lore else None,
             )
         answer = answer.strip()
         sources = tuple(path for path, _ in passages)

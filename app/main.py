@@ -26,10 +26,21 @@ def service_status() -> dict[str, int | str]:
     }
 
 
+@app.post("/invoke", dependencies=[Depends(require_service_token)])
+def invoke(request: AskRequest) -> AskResponse:
+    """Answer in the Oracle's lore voice."""
+    return _answer(request.question, lore=True)
+
+
 @app.post("/ask", dependencies=[Depends(require_service_token)])
 def ask(request: AskRequest) -> AskResponse:
+    """Answer plainly, without the lore system prompt."""
+    return _answer(request.question, lore=False)
+
+
+def _answer(question: str, *, lore: bool) -> AskResponse:
     try:
-        answer, sources = assistant.ask(request.question)
+        answer, sources = assistant.answer(question, lore=lore)
     except BudgetExceeded as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

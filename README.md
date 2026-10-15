@@ -6,7 +6,8 @@ shared Markdown content and a hosted language model.
 
 Oracle is read-only: it has no tools, no write mounts, and never changes
 anything. It grounds answers in `content/` and returns the source paths it used.
-Vaultsh exposes it to users as the read-only `invoke <question>` command.
+Vaultsh exposes it to users as the read-only `invoke <question>` (lore voice)
+and `ask <question>` (plain) commands.
 Answers carry a brief, Delphi-inspired voice while staying strictly grounded in
 the shared content.
 
@@ -51,13 +52,18 @@ paths.
 
 ## Endpoints
 
-- `POST /ask` `{"question": "..."}` → `{"answer": "...", "sources": ["/cv/about.md", ...]}`
+- `POST /invoke` `{"question": "..."}` → `{"answer": "...", "sources": ["/cv/about.md", ...]}`
+- `POST /ask` `{"question": "..."}` → the same shape, answered plainly
 - `GET /healthz` → `ok` (unauthenticated inside the Compose network)
 - `GET /status` → `{"status": "ok", "uptime_seconds": 0}`
 
-`POST /ask` requires `Authorization: Bearer <ORACLE_AUTH_TOKEN>`. When the
-provider is unavailable or the daily budget is exhausted, Oracle returns
-`503` so Vaultsh can degrade to `invoke unavailable`.
+`invoke` answers in the Oracle's lore voice; `ask` sends no system prompt and
+answers plainly. Both require `Authorization: Bearer <ORACLE_AUTH_TOKEN>` and
+ground the answer in the same retrieved content. Because `ask` omits the system
+prompt, it carries no persona or refusal rules; it still only receives retrieved
+public content. When the provider is unavailable or the daily budget is
+exhausted, Oracle returns `503` so Vaultsh can degrade to `invoke unavailable`
+or `ask unavailable`.
 
 ## Test
 
